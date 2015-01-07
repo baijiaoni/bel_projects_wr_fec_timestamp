@@ -19,12 +19,6 @@
 #define WR_Periph_UART        0xe2d13d04
 #define WR_Periph_1Wire       0x779c5443
 
-
-
-
-
-
-
 extern volatile unsigned int* pSDB_base;
 
 typedef struct pair64 {

@@ -52,7 +52,6 @@ use work.VME_Buffer_pack.all;
 use work.wb_mil_scu_pkg.all;
 use work.wr_serialtimestamp_pkg.all;
 use work.power_test_pkg.all;
-use work.endpoint_pkg.all;
 use work.fec_pkg.all;
 
 entity monster is
@@ -79,21 +78,11 @@ entity monster is
     g_en_lcd               : boolean;
     g_en_user_ow           : boolean;
     g_en_power_test        : boolean;
-    
---    g_lm32_cores           : natural := 1;
---    g_lm32_MSIs            : natural := 1;
---    g_lm32_ramsizes        : natural := 65536;
---    g_lm32_shared_ramsize  : natural := 16384/4; -- will only be used if g_lm32_cores > 1
---    g_lm32_are_ftm         : boolean := false;
-    
-    g_lm32_cores           : natural := 0;
-    g_lm32_MSIs            : natural := 0;
-    g_lm32_ramsizes        : natural := 0;
+    g_lm32_cores           : natural := 1;
+    g_lm32_MSIs            : natural := 1;
+    g_lm32_ramsizes        : natural := 65536;
     g_lm32_shared_ramsize  : natural := 16384/4; -- will only be used if g_lm32_cores > 1
-    g_lm32_are_ftm         : boolean := false;
-
-    g_fec_encoder          : boolean := true;
-    g_fec_decoder          : boolean := true
+    g_lm32_are_ftm         : boolean := false 
     );
   port(
     -- Required: core signals
@@ -287,7 +276,7 @@ architecture rtl of monster is
     f_lm32_irq_bridge_sdb(g_lm32_cores, g_lm32_MSIs);
   
   constant c_irq_layout_req : t_sdb_record_array(c_irq_slaves-1 downto 0) :=
-   (c_irqs_lm32     => f_sdb_auto_device(c_irq_ep_sdb,    false),
+   (c_irqs_lm32     => f_sdb_auto_device(c_irq_ep_sdb,    true),
     c_irqs_pcie     => f_sdb_auto_device(c_msi_pcie_sdb,  g_en_pcie),
     c_irqs_vme      => f_sdb_auto_device(c_vme_msi_sdb,   g_en_vme));
   
@@ -308,17 +297,16 @@ architecture rtl of monster is
   -- GSI Top Crossbar --------------------------------------------------------------
   ----------------------------------------------------------------------------------
   
-  constant c_top_masters    : natural := 7;
+  constant c_top_masters    : natural := 6;
   constant c_topm_ebs       : natural := 0;
   constant c_topm_lm32      : natural := 1;
   constant c_topm_pcie      : natural := 2;
   constant c_topm_vme       : natural := 3;
   constant c_topm_usb       : natural := 4;
   constant c_topm_fpq       : natural := 5;
-  constant c_topm_fec       : natural := 6;
   
   -- required slaves
-  constant c_top_slaves     : natural := 19;
+  constant c_top_slaves     : natural := 18;
   constant c_tops_irq       : natural := 0;
   constant c_tops_wrc       : natural := 1;
   constant c_tops_lm32      : natural := 2;
@@ -330,7 +318,6 @@ architecture rtl of monster is
   constant c_tops_eca_ctl   : natural := 8;
   constant c_tops_eca_event : natural := 9;
   constant c_tops_eca_aq    : natural := 10;
-
   -- !!! missing IO configuration slave
   -- optional slaves:
   constant c_tops_lcd       : natural := 11;
@@ -340,7 +327,7 @@ architecture rtl of monster is
   constant c_tops_mil_ctrl  : natural := 15;
   constant c_tops_ow        : natural := 16;
   constant c_tops_power_test: natural := 17;
-  constant c_tops_fec_reg   : natural := 18;
+
   
   -- We have to specify the values for WRC as there is no generic out in vhdl
   constant c_wrcore_bridge_sdb : t_sdb_bridge := f_xwb_bridge_manual_sdb(x"0003ffff", x"00030000");
@@ -358,7 +345,7 @@ architecture rtl of monster is
   constant c_top_layout_req : t_sdb_record_array(c_top_slaves-1 downto 0) :=
    (c_tops_irq       => f_sdb_auto_bridge(c_irq_bridge_sdb,                 true),
     c_tops_wrc       => f_sdb_auto_bridge(c_wrcore_bridge_sdb,              true),
-    c_tops_lm32      => f_sdb_auto_bridge(c_lm32_main_bridge_sdb,           false),
+    c_tops_lm32      => f_sdb_auto_bridge(c_lm32_main_bridge_sdb,           true),
     c_tops_build_id  => f_sdb_auto_device(c_build_id_sdb,                   true),
     c_tops_flash     => f_sdb_auto_device(f_wb_spi_flash_sdb(g_flash_bits), true),
     c_tops_reset     => f_sdb_auto_device(c_arria_reset,                    true),
@@ -371,10 +358,9 @@ architecture rtl of monster is
     c_tops_oled      => f_sdb_auto_device(c_oled_display,                   g_en_oled),
     c_tops_scubus    => f_sdb_auto_device(c_scu_bus_master,                 g_en_scubus),
     c_tops_mil       => f_sdb_auto_device(c_xwb_gsi_mil_scu,                g_en_mil),
-    c_tops_mil_ctrl  => f_sdb_auto_device(c_irq_master_ctrl_sdb,            g_en_mil),
+    c_tops_mil_ctrl  => f_sdb_auto_device(c_irq_ctrl_sdb,                   g_en_mil),
     c_tops_ow        => f_sdb_auto_device(c_wrc_periph2_sdb,                g_en_user_ow),
-    c_tops_power_test=> f_sdb_auto_device(c_xwb_power_test,                 g_en_power_test),
-    c_tops_fec_reg   => f_sdb_auto_device(c_fec_reg_sdb,                    true));
+    c_tops_power_test => f_sdb_auto_device(c_xwb_power_test,                g_en_power_test));
     
   constant c_top_layout      : t_sdb_record_array(c_top_slaves-1 downto 0) 
                                                   := f_sdb_auto_layout(c_top_layout_req);
@@ -457,17 +443,11 @@ architecture rtl of monster is
   signal wrc_slave_o   : t_wishbone_slave_out;
   signal wrc_master_i  : t_wishbone_master_in;
   signal wrc_master_o  : t_wishbone_master_out;
-
   signal eb_src_out    : t_wrf_source_out;
   signal eb_src_in     : t_wrf_source_in;
   signal eb_snk_out    : t_wrf_sink_out;
   signal eb_snk_in     : t_wrf_sink_in;
-
-  signal wr_src_out    : t_wrf_source_out;
-  signal wr_src_in     : t_wrf_source_in;
-  signal wr_snk_out    : t_wrf_sink_out;
-  signal wr_snk_in     : t_wrf_sink_in;
-
+  
   signal uart_usb : std_logic; -- from usb
   signal uart_mux : std_logic; -- either usb or external
   signal uart_wrc : std_logic; -- from wrc
@@ -523,7 +503,7 @@ architecture rtl of monster is
   
   -- END OF White Rabbit
   ----------------------------------------------------------------------------------
-  signal s_timestamps: t_txtsu_timestamp;
+
   ----------------------------------------------------------------------------------
   -- Mil-Extension signals ---------------------------------------------------------
   ----------------------------------------------------------------------------------
@@ -849,50 +829,63 @@ begin
     port map(
       clk_i           => clk_sys,
       nRst_i          => rstn_sys,
-
-      --snk_i           => eb_snk_in,
-      --snk_o           => eb_snk_out,
-      --src_o           => eb_src_out,
-      --src_i           => eb_src_in,
-
       snk_i           => eb_snk_in,
       snk_o           => eb_snk_out,
       src_o           => eb_src_out,
       src_i           => eb_src_in,
-
       ebs_cfg_slave_o => wrc_master_i,
       ebs_cfg_slave_i => wrc_master_o,
       ebs_wb_master_o => top_cbar_slave_i (c_topm_ebs),
       ebs_wb_master_i => top_cbar_slave_o (c_topm_ebs),
       ebm_wb_slave_i  => top_cbar_master_o(c_tops_ebm),
       ebm_wb_slave_o  => top_cbar_master_i(c_tops_ebm));
- 
---  lm32 : ftm_lm32_cluster 
---    generic map(
---      g_is_ftm           => g_lm32_are_ftm,	
---      g_cores            => g_lm32_cores,
---      g_ram_per_core     => g_lm32_ramsizes,
---      g_shared_mem       => g_lm32_shared_ramsize,
---      g_world_bridge_sdb => c_top_bridge_sdb,
---      g_init_file        => g_project & ".mif",
---      g_msi_per_core     => g_lm32_MSIs)
---    port map(
---      clk_sys_i            => clk_sys,
---      rst_n_i              => rstn_sys,
---      rst_lm32_n_i         => s_lm32_rstn,
---      tm_tai8ns_i     	   => sys_tai8ns,
---      irq_slave_o     	   => irq_cbar_master_i(c_irqs_lm32),
---      irq_slave_i     	   => irq_cbar_master_o(c_irqs_lm32),
---      cluster_slave_o      => top_cbar_master_i(c_tops_lm32),
---      cluster_slave_i      => top_cbar_master_o(c_tops_lm32),
---      ftm_queue_master_o   => top_cbar_slave_i (c_topm_fpq),
---      ftm_queue_master_i   => top_cbar_slave_o (c_topm_fpq),
---      master_o             => top_cbar_slave_i (c_topm_lm32),
---      master_i             => top_cbar_slave_o (c_topm_lm32));
-  top_cbar_slave_i(c_topm_fpq) <= cc_dummy_master_out;
-  top_cbar_slave_i(c_topm_lm32) <= cc_dummy_master_out;
+     
+  fec : xwb_fec
+    generic map(
+      g_fec_encoder => true,
+      g_fec_decoder => false,
+      g_packet_gen  => true)
 
---  
+    port map(
+      clk_i       => clk_sys,
+      rst_i       => rstn_sys,
+
+      wr_snk_i    => wr_snk_in,
+      wr_snk_o    => wr_snk_out,
+      wr_src_o    => wr_src_out,
+      wr_src_i    => wr_src_in,
+
+      eb_snk_i    => eb_snk_in,
+      eb_snk_o    => eb_snk_out,
+      eb_src_o    => eb_src_out,
+      eb_src_i    => eb_src_in,
+
+      wb_slave_o  => top_cbar_master_i(c_tops_fec),
+      wb_slave_i  => top_cbar_master_o(c_tops_fec));
+
+  lm32 : ftm_lm32_cluster 
+    generic map(
+      g_is_ftm           => g_lm32_are_ftm,	
+      g_cores            => g_lm32_cores,
+      g_ram_per_core     => g_lm32_ramsizes,
+      g_shared_mem       => g_lm32_shared_ramsize,
+      g_world_bridge_sdb => c_top_bridge_sdb,
+      g_init_file        => g_project & ".mif",
+      g_msi_per_core     => g_lm32_MSIs)
+    port map(
+      clk_sys_i            => clk_sys,
+      rst_n_i              => rstn_sys,
+      rst_lm32_n_i         => s_lm32_rstn,
+      tm_tai8ns_i     	   => sys_tai8ns,
+      irq_slave_o     	   => irq_cbar_master_i(c_irqs_lm32),
+      irq_slave_i     	   => irq_cbar_master_o(c_irqs_lm32),
+      cluster_slave_o      => top_cbar_master_i(c_tops_lm32),
+      cluster_slave_i      => top_cbar_master_o(c_tops_lm32),
+      ftm_queue_master_o   => top_cbar_slave_i (c_topm_fpq),
+      ftm_queue_master_i   => top_cbar_slave_o (c_topm_fpq),
+      master_o             => top_cbar_slave_i (c_topm_lm32),
+      master_i             => top_cbar_slave_o (c_topm_lm32));
+  
   pcie_n : if not g_en_pcie generate
     top_cbar_slave_i (c_topm_pcie) <= cc_dummy_master_out;
     irq_cbar_master_i(c_irqs_pcie) <= cc_dummy_slave_out;
@@ -1037,42 +1030,7 @@ begin
   
   wr_uart_o <= uart_wrc;
   uart_mux <= uart_usb or wr_uart_i;
-
-  FEC : xwb_fec
-    generic map(
-      g_fec_encoder      => g_fec_encoder,
-      g_fec_decoder      => g_fec_decoder,
-      g_packet_gen       => true,
-      g_dpram_size       => 131072/4,
-      g_init_file        => "../../../modules/wb_fec/firmware/fec_dec.mif",
-      g_upper_bridge_sdb => c_top_bridge_sdb)
-    port map(
-      clk_i         => clk_sys,
-      rst_n_i       => rstn_sys,
-      rst_lm32_n_i  => s_lm32_rstn,
-
-      wr_snk_i    => wr_snk_in,            
-      wr_snk_o    => wr_snk_out,
-      wr_src_o    => wr_src_out,
-      wr_src_i    => wr_src_in,
-
-      eb_snk_i    => eb_snk_in,
-      eb_snk_o    => eb_snk_out,
-      eb_src_o    => eb_src_out,
-      eb_src_i    => eb_src_in,
-
-      fec_timestamps_i      => s_timestamps,
-
-      wb_ctrl_stat_slave_o  => top_cbar_master_i(c_tops_fec_reg),
-      wb_ctrl_stat_slave_i  => top_cbar_master_o(c_tops_fec_reg),
-
-      wb_cross_master_o     => top_cbar_slave_i(c_topm_fec),
-      wb_cross_master_i     => top_cbar_slave_o(c_topm_fec));
-
-  fec_dec_n: if not g_fec_decoder generate
-    top_cbar_slave_i(c_topm_fec) <= cc_dummy_master_out;
-  end generate;
-
+  
   -- END OF Wishbone masters
   ----------------------------------------------------------------------------------
   
@@ -1140,19 +1098,16 @@ begin
       slave_o              => wrc_slave_o,
       aux_master_o         => wrc_master_o,
       aux_master_i         => wrc_master_i,
-
-      --wrf_src_o            => eb_snk_in,
-      --wrf_src_i            => eb_snk_out,
-      --wrf_snk_o            => eb_src_in,
-      --wrf_snk_i            => eb_src_out,
-
+      
       wrf_src_o            => wr_snk_in,
       wrf_src_i            => wr_snk_out,
       wrf_snk_o            => wr_src_in,
       wrf_snk_i            => wr_src_out,
-
-      timestamps_o         => s_timestamps,
-      timestamps_ack_i     => '1',
+ 
+      --wrf_src_o            => eb_snk_in,
+      --wrf_src_i            => eb_snk_out,
+      --wrf_snk_o            => eb_src_in,
+      --wrf_snk_i            => eb_src_out,
 
       tm_link_up_o         => open,
       tm_dac_value_o       => open,
