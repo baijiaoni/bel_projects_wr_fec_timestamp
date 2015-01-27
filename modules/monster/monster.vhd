@@ -1061,7 +1061,10 @@ begin
       eb_src_o    => eb_src_out,
       eb_src_i    => eb_src_in,
 
-      fec_timestamps_i      => s_timestamps,
+      fec_timestamps_i         => s_timestamps,
+      fec_tm_tai_i             => tm_tai,
+      fec_tm_cycle_i          => tm_cycles,
+
 
       wb_ctrl_stat_slave_o  => top_cbar_master_i(c_tops_fec_reg),
       wb_ctrl_stat_slave_i  => top_cbar_master_o(c_tops_fec_reg),
